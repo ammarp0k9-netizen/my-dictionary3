@@ -28,7 +28,6 @@
         .word-text { font-weight: bold; font-size: 1.1em; color: #2c3e50; }
         .meaning-text { color: #7f8c8d; font-size: 0.95em; }
         
-        /* ستايل الجملة (المثال) */
         .example-box { font-size: 0.9em; color: var(--example-color); font-style: italic; border-top: 1px solid #f0f0f0; margin-top: 5px; padding-top: 5px; display: none; text-align: left; direction: ltr; }
         .show-example .example-box { display: block; }
 
@@ -110,7 +109,7 @@
     }
 
     function toggleStar(id, event) {
-        event.stopPropagation(); // عشان ما يفتح المثال لما تضغط نجمة
+        event.stopPropagation();
         words = words.map(w => w.id === id ? {...w, starred: !w.starred} : w);
         saveAndRender();
     }
@@ -137,9 +136,21 @@
         }
     }
 
+    // --- التعديل السحري هنا لنطق وبستر ---
     function playSound(word, event) {
         event.stopPropagation();
-        new Audio('sounds/' + word.toLowerCase() + '.mp3').play().catch(() => {});
+        const cleanWord = word.trim().toLowerCase();
+        const firstLetter = cleanWord.charAt(0);
+        // رابط قاموس ميريام وبستر المباشر
+        const audioUrl = `https://media.merriam-webster.com/audio/prons/en/us/mp3/${firstLetter}/${cleanWord}.mp3`;
+        
+        const audio = new Audio(audioUrl);
+        audio.play().catch(() => {
+            // نطق احتياطي في حال لم تتوفر الكلمة في وبستر
+            const msg = new SpeechSynthesisUtterance(word);
+            msg.lang = 'en-US';
+            window.speechSynthesis.speak(msg);
+        });
     }
 
     function toggleExample(el) {
