@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>قاموس السياق الاحترافي</title>
+    <style>
+        :root { --primary: #3498db; --star-color: #f1c40f; --bg: #f4f7f6; --example-color: #95a5a6; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); padding: 20px; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #2c3e50; text-align: center; }
+        
+        .input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        input, select, textarea { padding: 10px; border: 2px solid #ddd; border-radius: 10px; outline: none; text-align: center; font-size: 15px; font-family: inherit; }
+        input:focus, textarea:focus { border-color: var(--primary); }
+        .btn-main { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        
+        .toolbar { display: flex; gap: 8px; margin-bottom: 15px; }
+        .btn-tool { flex: 1; padding: 8px; font-size: 13px; border-radius: 20px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
+        .active-tool { background: var(--primary); color: white; border-color: var(--primary); }
+
+        ul { list-style: none; padding: 0; margin-top: 10px; max-height: 500px; overflow-y: auto; }
+        li { background: #fff; margin-bottom: 8px; padding: 12px; border-radius: 12px; border-right: 5px solid var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.03); display: flex; flex-direction: column; gap: 5px; cursor: pointer; transition: 0.2s; }
+        li:hover { background: #fcfcfc; }
+        
+        .top-row { display: flex; align-items: center; gap: 8px; }
+        .word-box { flex-grow: 1; text-align: right; }
+        .word-text { font-weight: bold; font-size: 1.1em; color: #2c3e50; }
+        .meaning-text { color: #7f8c8d; font-size: 0.95em; }
+        
+        /* ستايل الجملة (المثال) */
+        .example-box { font-size: 0.9em; color: var(--example-color); font-style: italic; border-top: 1px solid #f0f0f0; margin-top: 5px; padding-top: 5px; display: none; text-align: left; direction: ltr; }
+        .show-example .example-box { display: block; }
+
+        .star-btn { font-size: 20px; cursor: pointer; color: #ccc; background: none; border: none; padding: 0; }
+        .star-btn.active { color: var(--star-color); }
+        .icon-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #6c5ce7; }
+        .edit-btn { color: #27ae60; font-size: 16px; }
+        .del-btn { color: #ff7675; font-size: 18px; }
+        .cat-tag { font-size: 10px; background: #e0e0e0; padding: 2px 6px; border-radius: 10px; color: #666; margin-right: 5px; }
+
+        .backup-zone { margin-top: 25px; border-top: 2px dashed #eee; padding-top: 15px; display: flex; gap: 10px; }
+        .btn-backup { flex: 1; padding: 8px; font-size: 11px; background: #95a5a6; color: white; border-radius: 8px; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📚 قاموس السياق الذكي</h2>
+    
+    <div class="input-group">
+        <input type="text" id="wordInput" placeholder="الكلمة بالإنجليزي">
+        <input type="text" id="meaningInput" placeholder="المعنى بالعربي">
+        <textarea id="exampleInput" placeholder="جملة مثال (اختياري)" rows="2"></textarea>
+        <select id="categoryInput">
+            <option value="عام">عام</option>
+            <option value="أفعال">أفعال</option>
+            <option value="أسماء">أسماء</option>
+            <option value="جمل">جمل شائعة</option>
+        </select>
+        <button class="btn-main" id="addBtn" onclick="addWord()">إضافة للقاموس</button>
+    </div>
+
+    <div class="toolbar">
+        <button id="toolAll" class="btn-tool active-tool" onclick="setFilter('all')">الكل</button>
+        <button id="toolStarred" class="btn-tool" onclick="setFilter('starred')">⭐ الصعبة</button>
+    </div>
+
+    <input type="text" id="searchInput" style="width: 95%; background: #fff9db; border-color:#f1c40f;" placeholder="🔎 ابحث عن كلمة، معنى أو جملة..." onkeyup="render()">
+
+    <ul id="list"></ul>
+
+    <div class="backup-zone">
+        <button class="btn-backup" onclick="exportData()">📥 تصدير</button>
+        <button class="btn-backup" onclick="document.getElementById('importFile').click()">📤 استيراد</button>
+        <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+    </div>
+</div>
+
+<script>
+    let words = JSON.parse(localStorage.getItem('myContextDict')) || [];
+    let currentFilter = 'all';
+    let editId = null;
+
+    function addWord() {
+        let w = document.getElementById('wordInput').value.trim();
+        let m = document.getElementById('meaningInput').value.trim();
+        let ex = document.getElementById('exampleInput').value.trim();
+        let c = document.getElementById('categoryInput').value;
+        if(!w || !m) return;
+
+        if (editId) {
+            words = words.map(item => item.id === editId ? {...item, word: w, meaning: m, example: ex, category: c} : item);
+            editId = null;
+            document.getElementById('addBtn').innerText = "إضافة للقاموس";
+            document.getElementById('addBtn').style.background = "#3498db";
+        } else {
+            words.unshift({ id: Date.now() + Math.random(), word: w, meaning: m, example: ex, category: c, starred: false });
+        }
+        
+        clearInputs();
+        saveAndRender();
+    }
+
+    function clearInputs() {
+        document.getElementById('wordInput').value = '';
+        document.getElementById('meaningInput').value = '';
+        document.getElementById('exampleInput').value = '';
+        document.getElementById('categoryInput').value = 'عام';
+    }
+
+    function toggleStar(id, event) {
+        event.stopPropagation(); // عشان ما يفتح المثال لما تضغط نجمة
+        words = words.map(w => w.id === id ? {...w, starred: !w.starred} : w);
+        saveAndRender();
+    }
+
+    function startEdit(id, event) {
+        event.stopPropagation();
+        let item = words.find(w => w.id === id);
+        if(!item) return;
+        document.getElementById('wordInput').value = item.word;
+        document.getElementById('meaningInput').value = item.meaning;
+        document.getElementById('exampleInput').value = item.example || '';
+        document.getElementById('categoryInput').value = item.category;
+        editId = id;
+        document.getElementById('addBtn').innerText = "تحديث الكلمة";
+        document.getElementById('addBtn').style.background = "#27ae60";
+        window.scrollTo(0,0);
+    }
+
+    function deleteWord(id, event) {
+        event.stopPropagation();
+        if(confirm("حذف؟")) {
+            words = words.filter(w => w.id !== id);
+            saveAndRender();
+        }
+    }
+
+    function playSound(word, event) {
+        event.stopPropagation();
+        new Audio('sounds/' + word.toLowerCase() + '.mp3').play().catch(() => {});
+    }
+
+    function toggleExample(el) {
+        el.classList.toggle('show-example');
+    }
+
+    function setFilter(f) {
+        currentFilter = f;
+        document.getElementById('toolAll').classList.toggle('active-tool', f === 'all');
+        document.getElementById('toolStarred').classList.toggle('active-tool', f === 'starred');
+        render();
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('myContextDict', JSON.stringify(words));
+        render();
+    }
+
+    function render() {
+        let query = document.getElementById('searchInput').value.toLowerCase();
+        let html = '';
+        let filtered = words.filter(w => (w.word.toLowerCase().includes(query) || w.meaning.includes(query) || (w.example && w.example.toLowerCase().includes(query))) && (currentFilter === 'all' || w.starred));
+
+        filtered.forEach(w => {
+            html += `
+                <li onclick="toggleExample(this)">
+                    <div class="top-row">
+                        <button class="star-btn ${w.starred ? 'active' : ''}" onclick="toggleStar(${w.id}, event)">★</button>
+                        <div class="word-box">
+                            <div class="word-text">${w.word} <span class="cat-tag">${w.category}</span></div>
+                            <div class="meaning-text">${w.meaning}</div>
+                        </div>
+                        <button class="icon-btn" onclick="playSound('${w.word}', event)">🔊</button>
+                        <button class="icon-btn edit-btn" onclick="startEdit(${w.id}, event)">📝</button>
+                        <button class="del-btn" onclick="deleteWord(${w.id}, event)">×</button>
+                    </div>
+                    ${w.example ? `<div class="example-box"><b>Ex:</b> ${w.example}</div>` : ''}
+                </li>`;
+        });
+        document.getElementById('list').innerHTML = html;
+    }
+
+    function exportData() {
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(JSON.stringify(words));
+        const link = document.createElement('a');
+        link.setAttribute('href', dataUri);
+        link.setAttribute('download', 'my_context_dict.json');
+        link.click();
+    }
+
+    function importData(event) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            words = JSON.parse(e.target.result).map(i => ({...i, id: i.id || Math.random()}));
+            saveAndRender();
+        };
+        reader.readAsText(event.target.files[0]);
+    }
+
+    render();
+</script>
+</body>
+</html>
